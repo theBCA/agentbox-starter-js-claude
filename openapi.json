@@ -1,0 +1,564 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DocBrief",
+    "version": "0.1.0",
+    "description": "AgentBox custom-application starter. Hand-maintained: unlike the Python starters, which generate this document from FastAPI, the Node starters have no framework that emits one — so a new route here needs a matching entry below, and the starter app test suite fails if the two drift."
+  },
+  "paths": {
+    "/demo/fetch-url": {
+      "post": {
+        "summary": "Try to reach a host, and report SecureProxy's answer",
+        "description": "Issues a raw CONNECT through SecureProxy's forward proxy and returns the proxy's own status line. Shipped egress policy is whitelist with an empty list, so expect `status: 403`. Add the host to Allowed destinations on this application and call again for `status: 200`. 407 means the credential did not survive, which is a wiring fault rather than a policy decision.",
+        "operationId": "fetch_url_through_secureproxy",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": "Bare hostname, no scheme or path"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "default": 443
+                  }
+                },
+                "required": [
+                  "host"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The proxy's decision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer"
+                    },
+                    "proxied": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "allowed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "port",
+                    "proxied",
+                    "status",
+                    "reason"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/demo/install-package": {
+      "post": {
+        "summary": "Install a package, and report TrustGate's decision",
+        "description": "Runs a real install through the PATH shim TrustGate installs, and returns the verdict: `allow` for an allowlisted package, `block` for a denylisted one (refused before anything is downloaded), or `hold`, which parks it for approval and puts an entry in Security -> TrustGate approvals. A non-zero exit_code usually means the platform worked. `infra_failure` is non-null when TrustGate itself failed rather than decided -- that fails closed, so it otherwise reads exactly like a policy block.",
+        "operationId": "install_package_via_trustgate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "package": {
+                    "type": "string"
+                  },
+                  "manager": {
+                    "type": "string",
+                    "enum": [
+                      "npm",
+                      "pip"
+                    ],
+                    "default": "npm"
+                  }
+                },
+                "required": [
+                  "package"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "TrustGate's decision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "package": {
+                      "type": "string"
+                    },
+                    "manager": {
+                      "type": "string"
+                    },
+                    "verdict": {
+                      "type": "string",
+                      "enum": [
+                        "allow",
+                        "hold",
+                        "block",
+                        "none"
+                      ]
+                    },
+                    "exit_code": {
+                      "type": "integer"
+                    },
+                    "output": {
+                      "type": "string"
+                    },
+                    "infra_failure": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "package",
+                    "manager",
+                    "verdict",
+                    "exit_code",
+                    "output"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/demo/touch-agent-file": {
+      "post": {
+        "summary": "Trigger a Defender content scan",
+        "description": "Writes a file containing a canonical, harmless prompt-injection test string into the agent-files directory. Defender audits findings, not routine clean writes, so this deliberately matches a real detection rule to make an audit event appear. Check Security > Audit Log a few seconds afterwards.",
+        "operationId": "touch_agent_file",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "path",
+                    "note"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "description": "AGENTBOX_AGENTIC_FILES_PATH is not set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Liveness",
+        "description": "AgentBox polls this to mark the application running.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "ok"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp/delete-all-notes": {
+      "post": {
+        "summary": "Ask to delete every note, and expect to be stopped",
+        "description": "Calls delete_all_notes, which the bridge's tool classifier marks DESTRUCTIVE and therefore sensitive: the call is held and queued for an operator rather than executed. Approve or deny it under Security, then call again.",
+        "operationId": "delete_all_notes_via_mcp",
+        "responses": {
+          "200": {
+            "description": "The MCP Bridge response, passed through unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/mcp/list-notes": {
+      "post": {
+        "summary": "Read the notes back through MCP Bridge",
+        "description": "Calls list_notes on this application's bundled notes-server. Classified read_only, so unlike delete-all-notes it is never held for approval.",
+        "operationId": "list_notes_via_mcp",
+        "responses": {
+          "200": {
+            "description": "The MCP Bridge response, passed through unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/mcp/save-note": {
+      "post": {
+        "summary": "Call the bundled MCP server through MCP Bridge",
+        "description": "Calls save_note on this application's own bundled notes-server. The bridge refuses with 403 until the server has been approved and bound to this application, which this route reports as a 502.",
+        "operationId": "save_note_via_mcp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The MCP Bridge response, passed through unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/process": {
+      "post": {
+        "summary": "Summarise a document",
+        "description": "Runs the bundled agentic SDK through SecureProxy. A SecureProxy DLP refusal is surfaced as a 403 with a stable reason string rather than folded into a generic 500.",
+        "operationId": "process_document",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "SecureProxy blocked the request (policy or DLP decision, not an application fault)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/process/stream": {
+      "post": {
+        "summary": "Summarise a document, streaming the agent's turns",
+        "description": "Server-sent events. Emits `start`, then `token` as text arrives and `tool` each time the agent calls something, then `result` with the final answer and `done`. An error after the stream has opened arrives as an `error` event rather than an HTTP status, because the response has already started with 200.",
+        "operationId": "process_document_streaming",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/process/upload": {
+      "post": {
+        "summary": "Summarise an uploaded document",
+        "description": "Same as /process, with the document supplied as a UTF-8 text file.",
+        "operationId": "process_upload",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "question": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ProcessRequest": {
+        "type": "object",
+        "title": "ProcessRequest",
+        "properties": {
+          "document": {
+            "type": "string",
+            "minLength": 1
+          },
+          "question": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "document"
+        ]
+      },
+      "ProcessResponse": {
+        "type": "object",
+        "title": "ProcessResponse",
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "action_items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backend": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "action_items",
+          "answer",
+          "backend"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "title": "Error",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
